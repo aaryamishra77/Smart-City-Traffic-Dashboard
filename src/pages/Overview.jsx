@@ -22,8 +22,18 @@ const Overview = () => {
   const [cityCoordinates, setCityCoordinates] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // 👇 Read the API key safely from env
+  const API_KEY =
+    import.meta.env.VITE_TOMTOM_API_KEY || process.env.VITE_TOMTOM_API_KEY;
+
   const fetchCityCoordinates = async (cityName) => {
-    const GEOCODE_API = `https://api.tomtom.com/search/2/geocode/${cityName}.json?key=${import.meta.env.VITE_TOMTOM_API_KEY}`;
+    if (!API_KEY) {
+      console.error("❌ TomTom API Key not found!");
+      alert("API key missing. Please check deployment settings.");
+      return null;
+    }
+
+    const GEOCODE_API = `https://api.tomtom.com/search/2/geocode/${cityName}.json?key=${API_KEY}`;
     try {
       const res = await fetch(GEOCODE_API);
       const data = await res.json();
@@ -101,11 +111,15 @@ const Overview = () => {
           </div>
           <div className="bg-white p-4 rounded shadow">
             <h4 className="text-lg font-bold">Free Flow Speed</h4>
-            <p className="text-green-600 text-xl">{selectedCity.freeFlow} km/h</p>
+            <p className="text-green-600 text-xl">
+              {selectedCity.freeFlow} km/h
+            </p>
           </div>
           <div className="bg-white p-4 rounded shadow">
             <h4 className="text-lg font-bold">Confidence</h4>
-            <p className="text-purple-600 text-xl">{(selectedCity.confidence * 100).toFixed(1)}%</p>
+            <p className="text-purple-600 text-xl">
+              {(selectedCity.confidence * 100).toFixed(1)}%
+            </p>
           </div>
         </div>
       )}
