@@ -32,6 +32,8 @@ Get live traffic updates across **all cities in India**, visualize data with int
 | TomTom API     | Real-time traffic + geolocation data |
 
 ---
-
-## 🧩 Folder Structure
+📤 Deployment
+This project is deployed using Netlify with GitHub auto-deploy.
+🧠 Author
+👨‍💻 Aarya Mishra
 
