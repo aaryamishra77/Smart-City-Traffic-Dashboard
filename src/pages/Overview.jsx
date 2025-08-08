@@ -1,157 +1,147 @@
-import { useEffect, useState } from "react";
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { fetchTrafficData } from "../api/traffic";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
+  BarElement,
   CategoryScale,
   LinearScale,
-  BarElement,
   Tooltip,
   Legend,
 } from "chart.js";
-import { motion } from "framer-motion";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
 
-// Register ChartJS elements
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
-// ✅ Export cities for use elsewhere
-export const cities = {
-  Delhi: { lat: 28.6139, lon: 77.209 },
-  Mumbai: { lat: 19.076, lon: 72.8777 },
-  Bengaluru: { lat: 12.9716, lon: 77.5946 },
-  Hyderabad: { lat: 17.385, lon: 78.4867 },
-  Chennai: { lat: 13.0827, lon: 80.2707 },
-  Kolkata: { lat: 22.5726, lon: 88.3639 },
-  Pune: { lat: 18.5204, lon: 73.8567 },
-  Ahmedabad: { lat: 23.0225, lon: 72.5714 },
-  Jaipur: { lat: 26.9124, lon: 75.7873 },
-  Guna: { lat: 24.6542, lon: 77.321 },
-};
+const Overview = () => {
+  const [trafficData, setTrafficData] = useState([]);
+  const [selectedCity, setSelectedCity] = useState(null);
+  const [cityInput, setCityInput] = useState("");
+  const [cityCoordinates, setCityCoordinates] = useState({});
+  const [loading, setLoading] = useState(false);
 
-export default function Overview() {
-  const [selectedCity, setSelectedCity] = useState("Delhi");
-  const [trafficData, setTrafficData] = useState({});
-  const [loading, setLoading] = useState(true);
+  const fetchCityCoordinates = async (cityName) => {
+    const GEOCODE_API = `https://api.tomtom.com/search/2/geocode/${cityName}.json?key=${import.meta.env.VITE_TOMTOM_API_KEY}`;
+    try {
+      const res = await fetch(GEOCODE_API);
+      const data = await res.json();
+      const position = data.results[0]?.position;
+      if (position) return { lat: position.lat, lon: position.lon };
+      return null;
+    } catch (err) {
+      console.error("Error fetching city coordinates:", err);
+      return null;
+    }
+  };
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      const allData = {};
-      setLoading(true);
-      for (const city in cities) {
-        const { lat, lon } = cities[city];
-        const data = await fetchTrafficData(lat, lon);
-        if (data) {
-          allData[city] = data.flowSegmentData;
-        }
-      }
-      setTrafficData(allData);
+  const handleSearch = async () => {
+    if (!cityInput) return;
+    setLoading(true);
+    const coords = await fetchCityCoordinates(cityInput);
+    if (!coords) {
+      alert("City not found!");
       setLoading(false);
-    };
-    fetchAll();
-  }, []);
+      return;
+    }
+    const data = await fetchTrafficData(coords.lat, coords.lon);
+    if (data) {
+      const traffic = {
+        city: cityInput,
+        coordinates: coords,
+        speed: data.flowSegmentData.currentSpeed,
+        freeFlow: data.flowSegmentData.freeFlowSpeed,
+        confidence: data.flowSegmentData.confidence,
+      };
+      setSelectedCity(traffic);
+      setTrafficData((prev) => {
+        const updated = prev.filter((item) => item.city !== cityInput);
+        return [...updated, traffic];
+      });
+    }
+    setLoading(false);
+  };
 
-  const selected = trafficData[selectedCity];
-
-  const chartData = {
-    labels: Object.keys(cities),
+  const barChartData = {
+    labels: trafficData.map((c) => c.city),
     datasets: [
       {
-        label: "Current Speed (km/h)",
-        data: Object.values(trafficData).map((d) => d?.currentSpeed || 0),
-        backgroundColor: "#60a5fa",
+        label: "Speed (km/h)",
+        data: trafficData.map((c) => c.speed),
+        backgroundColor: "#3b82f6",
       },
     ],
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* 🧭 Header & City Selector */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">🚦 Smart City Traffic Dashboard</h1>
-        <select
-          value={selectedCity}
-          onChange={(e) => setSelectedCity(e.target.value)}
-          className="bg-white border border-gray-300 rounded px-4 py-2 shadow"
+    <div className="p-4 space-y-6">
+      <div className="flex gap-4 items-center">
+        <input
+          type="text"
+          className="border p-2 rounded w-60"
+          placeholder="Enter city name"
+          value={cityInput}
+          onChange={(e) => setCityInput(e.target.value)}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
-          {Object.keys(cities).map((city) => (
-            <option key={city}>{city}</option>
-          ))}
-        </select>
+          {loading ? "Loading..." : "Search City"}
+        </button>
       </div>
 
-      {/* 📍 Live Traffic Map */}
-      <motion.div
-        className="rounded-xl overflow-hidden shadow-lg"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+      {selectedCity && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded shadow">
+            <h4 className="text-lg font-bold">Current Speed</h4>
+            <p className="text-blue-600 text-xl">{selectedCity.speed} km/h</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h4 className="text-lg font-bold">Free Flow Speed</h4>
+            <p className="text-green-600 text-xl">{selectedCity.freeFlow} km/h</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h4 className="text-lg font-bold">Confidence</h4>
+            <p className="text-purple-600 text-xl">{(selectedCity.confidence * 100).toFixed(1)}%</p>
+          </div>
+        </div>
+      )}
+
+      <div className="h-[400px] w-full">
+        <Bar data={barChartData} options={{ responsive: true }} />
+      </div>
+
+      <MapContainer
+        center={[20.5937, 78.9629]}
+        zoom={5}
+        scrollWheelZoom={true}
+        className="h-[400px] w-full rounded shadow"
       >
-        <MapContainer
-          center={[cities[selectedCity].lat, cities[selectedCity].lon]}
-          zoom={5}
-          style={{ height: "400px", width: "100%" }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
-          {Object.entries(cities).map(([name, { lat, lon }]) => (
-            <Marker key={name} position={[lat, lon]}>
-              <Popup>
-                <strong>{name}</strong>
-                <br />
-                {trafficData[name]?.currentSpeed
-                  ? `Speed: ${trafficData[name].currentSpeed} km/h`
-                  : "Loading..."}
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </motion.div>
-
-      {/* 📊 Traffic Speed Bar Chart */}
-      {!loading && (
-        <motion.div
-          className="bg-white p-4 rounded-xl shadow-lg"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-xl font-semibold mb-4">City-Wise Traffic Speed</h2>
-          <Bar data={chartData} />
-        </motion.div>
-      )}
-
-      {/* 🔍 Traffic Info Cards */}
-      {selected && (
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-3 gap-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <div className="bg-white p-4 rounded-xl shadow border-t-4 border-green-500">
-            <h3 className="text-lg font-medium">Current Speed</h3>
-            <p className="text-2xl font-bold text-green-600">
-              {selected.currentSpeed} km/h
-            </p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow border-t-4 border-blue-500">
-            <h3 className="text-lg font-medium">Free Flow Speed</h3>
-            <p className="text-2xl font-bold text-blue-600">
-              {selected.freeFlowSpeed} km/h
-            </p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow border-t-4 border-yellow-400">
-            <h3 className="text-lg font-medium">Confidence</h3>
-            <p className="text-2xl font-bold text-yellow-500">
-              {selected.confidence}%
-            </p>
-          </div>
-        </motion.div>
-      )}
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+        {trafficData.map((city, idx) => (
+          <Marker
+            key={idx}
+            position={[city.coordinates.lat, city.coordinates.lon]}
+            icon={L.icon({
+              iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+              iconSize: [30, 30],
+            })}
+          >
+            <Popup>
+              <strong>{city.city}</strong>
+              <br /> Speed: {city.speed} km/h
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
-}
+};
+
+export default Overview;
